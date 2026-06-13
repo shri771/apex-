@@ -4,15 +4,17 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "==> Starting Ollama in background..."
-ollama serve &
-OLLAMA_PID=$!
-
-echo "==> Waiting for Ollama on :11434..."
-until curl -s http://localhost:11434/api/tags > /dev/null 2>&1; do
-    sleep 1
-done
-echo "==> Ollama is up (pid $OLLAMA_PID)"
+if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+    echo "==> Ollama already running, skipping start"
+else
+    echo "==> Starting Ollama in background..."
+    ollama serve &
+    echo "==> Waiting for Ollama on :11434..."
+    until curl -s http://localhost:11434/api/tags > /dev/null 2>&1; do
+        sleep 1
+    done
+fi
+echo "==> Ollama is up"
 
 echo "==> Starting FastAPI backend..."
 cd "$REPO_DIR"
