@@ -1,7 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -e
 
-REPO_DIR="$HOME/iq-hack"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "==> Starting Ollama in background..."
 ollama serve &
