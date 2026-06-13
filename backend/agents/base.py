@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
+import json
 from datetime import datetime, timedelta
 from backend.db.database import SessionLocal
-from backend.db.models import AgentRun, Insight, Alert
-from backend import llm
+from backend.db.models import AgentRun, Insight, Alert, Settings
+from backend.llm import ollama_client as _ollama_client
 
 
 SYSTEM_PROMPT = (
@@ -25,6 +26,7 @@ class BaseAgent(ABC):
     def __init__(self, name: str, model: str = DEFAULT_MODEL):
         self.name = name
         self.model = model
+        self.ollama_client = _ollama_client
 
     @abstractmethod
     async def fetch_sources(self) -> list[dict]:
@@ -35,7 +37,7 @@ class BaseAgent(ABC):
         """Analyse a raw item and return an insight dict."""
 
     async def _default_analyse(self, item: dict) -> dict:
-        result = await llm.ollama_client.generate(
+        result = await _ollama_client.generate(
             model=self.model,
             system=SYSTEM_PROMPT,
             user=USER_PROMPT_TEMPLATE.format(raw_text=item.get("raw_text", "")),
@@ -43,6 +45,16 @@ class BaseAgent(ABC):
         result["source"] = item.get("source", "")
         result["raw_text"] = item.get("raw_text", "")
         return result
+
+    def _get_setting(self, key: str, default):
+        with SessionLocal() as db:
+            row = db.query(Settings).filter(Settings.key == key).first()
+            if row is None:
+                return default
+            try:
+                return json.loads(row.value)
+            except Exception:
+                return row.value if row.value is not None else default
 
     def store(self, insight: dict, run_id: int) -> Insight:
         now = datetime.utcnow()
@@ -67,10 +79,10 @@ class BaseAgent(ABC):
             db.refresh(row)
             insight_id = row.id
 
-            if row.severity == "high" and row.category == "threat":
+            if row.severity == "high":
                 alert = Alert(
                     insight_id=insight_id,
-                    title=f"[{self.name.upper()}] High-severity threat detected",
+                    title=f"[{self.name.upper()}] High-severity finding detected",
                     body=row.summary,
                 )
                 db.add(alert)

@@ -21,7 +21,7 @@ class AlertModel {
       insightId: json['insight_id'] as int?,
       title: json['title'] as String,
       body: json['body'] as String,
-      dismissed: (json['dismissed'] as int) != 0,
+      dismissed: json['dismissed'] == true || json['dismissed'] == 1,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }

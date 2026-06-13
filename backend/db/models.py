@@ -3,12 +3,19 @@ from sqlalchemy import Column, Integer, Text, Float, DateTime, Date, ForeignKey,
 from backend.db.database import Base
 
 
+class Settings(Base):
+    __tablename__ = "settings"
+
+    key   = Column(Text, primary_key=True)
+    value = Column(Text, nullable=True)
+
+
 class Insight(Base):
     __tablename__ = "insights"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     agent = Column(Text, nullable=False)
-    run_id = Column(Integer, nullable=False)
+    run_id = Column(Integer, ForeignKey("agent_runs.id"), nullable=False)
     source = Column(Text, nullable=False)
     raw_text = Column(Text, nullable=True)
     summary = Column(Text, nullable=False)

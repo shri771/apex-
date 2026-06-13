@@ -1,11 +1,24 @@
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.db.database import get_db
 from backend.db.models import Insight
 
 router = APIRouter(prefix="/insights", tags=["insights"])
+
+
+class InsightCreate(BaseModel):
+    agent: str
+    run_id: int
+    source: str
+    summary: str
+    category: str
+    severity: str
+    raw_text: Optional[str] = None
+    score: Optional[float] = None
+    extra_data: Optional[str] = None
 
 
 @router.get("")
@@ -28,6 +41,15 @@ def list_insights(
         q = q.filter(Insight.created_at >= since)
     rows = q.order_by(Insight.created_at.desc()).limit(limit).all()
     return rows
+
+
+@router.post("")
+def create_insight(payload: InsightCreate, db: Session = Depends(get_db)):
+    row = Insight(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 @router.get("/{insight_id}")

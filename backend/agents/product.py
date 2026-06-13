@@ -36,15 +36,19 @@ class ProductAgent(BaseAgent):
         return items
 
     async def _fetch_playstore(self) -> list[dict]:
+        import asyncio
         app_ids_raw = self._get_setting("product_app_ids", "")
         if not app_ids_raw:
             return []
         app_ids = [a.strip() for a in app_ids_raw.split(",") if a.strip()]
         items = []
+        loop = asyncio.get_event_loop()
         for app_id in app_ids:
             try:
                 from google_play_scraper import reviews  # type: ignore
-                result, _ = reviews(app_id, count=20, lang="en", country="us")
+                result, _ = await loop.run_in_executor(
+                    None, lambda: reviews(app_id, count=20, lang="en", country="us")
+                )
                 for r in result:
                     items.append({
                         "source_type": "playstore",
@@ -162,7 +166,7 @@ class ProductAgent(BaseAgent):
                 .filter(
                     Insight.agent == "product",
                     Insight.created_at >= since,
-                    Insight.metadata.contains(source_type),
+                    Insight.extra_data.contains(source_type),
                 )
                 .scalar()
             )

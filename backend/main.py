@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from backend.db.database import init_db
 from backend.scheduler import setup_scheduler, get_scheduler
 from backend.llm.ollama_client import is_available
-from backend.routers import insights, alerts, agents, briefs
+from backend.routers import insights, alerts, agents, briefs, settings
 
 
 @asynccontextmanager
@@ -25,6 +25,7 @@ app.include_router(insights.router)
 app.include_router(alerts.router)
 app.include_router(agents.router)
 app.include_router(briefs.router)
+app.include_router(settings.router)
 
 
 @app.get("/health")

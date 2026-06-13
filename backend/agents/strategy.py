@@ -128,7 +128,8 @@ class StrategyAgent(BaseAgent):
                 content = sections.get(section_title, "")
                 doc.add_heading(section_title, level=1)
                 para = doc.add_paragraph(content)
-                para.runs[0].font.size = Pt(11) if para.runs else None
+                if para.runs:
+                    para.runs[0].font.size = Pt(11)
 
             file_path = os.path.join(BRIEF_DIR, f"brief_{week_start}.docx")
             doc.save(file_path)

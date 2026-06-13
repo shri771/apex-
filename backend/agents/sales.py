@@ -205,7 +205,7 @@ class SalesAgent(BaseAgent):
             for ins in insights:
                 meta = {}
                 try:
-                    meta = json.loads(ins.metadata or "{}")
+                    meta = json.loads(ins.extra_data or "{}")
                 except Exception:
                     pass
                 top_leads.append({
@@ -221,11 +221,11 @@ class SalesAgent(BaseAgent):
                 first = insights[0]
                 existing_meta = {}
                 try:
-                    existing_meta = json.loads(first.metadata or "{}")
+                    existing_meta = json.loads(first.extra_data or "{}")
                 except Exception:
                     pass
                 existing_meta["top_leads"] = top_leads
-                first.metadata = json.dumps(existing_meta)
+                first.extra_data = json.dumps(existing_meta)
                 db.commit()
         finally:
             db.close()

@@ -88,6 +88,28 @@ class ApiService {
     }
   }
 
+  Future<Map<String, String>> getSettings() async {
+    try {
+      final response = await _dio.get('/settings');
+      final list = response.data as List<dynamic>;
+      return {
+        for (final item in list)
+          (item as Map<String, dynamic>)['key'] as String: item['value'] as String? ?? '',
+      };
+    } on DioException catch (e) {
+      debugPrint('getSettings error: ${e.message}');
+      return {};
+    }
+  }
+
+  Future<void> saveSetting(String key, String value) async {
+    try {
+      await _dio.post('/settings', data: {'key': key, 'value': value});
+    } on DioException catch (e) {
+      debugPrint('saveSetting error: ${e.message}');
+    }
+  }
+
   Future<String> downloadBrief(int id) async {
     final cacheDir = Directory.systemTemp;
     final filePath = '${cacheDir.path}/brief_$id.docx';

@@ -14,9 +14,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _competitorsCtrl = TextEditingController();
   final _appIdsCtrl = TextEditingController();
   String _selectedModel = 'phi3:mini';
+  bool _saving = false;
 
   static const _models = ['phi3:mini', 'llama3.2:3b', 'gemma2:2b'];
   static const _agents = ['marketing', 'product', 'sales', 'strategy'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final settings = await widget.api.getSettings();
+    if (!mounted) return;
+    setState(() {
+      _keywordsCtrl.text = settings['product_keywords'] ?? '';
+      _competitorsCtrl.text = settings['sales_companies'] ?? '';
+      _appIdsCtrl.text = settings['product_app_ids'] ?? '';
+      final model = settings['ollama_model'];
+      if (model != null && _models.contains(model)) {
+        _selectedModel = model;
+      }
+    });
+  }
+
+  Future<void> _saveSettings() async {
+    setState(() => _saving = true);
+    try {
+      await Future.wait([
+        widget.api.saveSetting('product_keywords', _keywordsCtrl.text.trim()),
+        widget.api.saveSetting('sales_companies', _competitorsCtrl.text.trim()),
+        widget.api.saveSetting('product_app_ids', _appIdsCtrl.text.trim()),
+        widget.api.saveSetting('ollama_model', _selectedModel),
+      ]);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Settings saved')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -87,7 +126,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             items: _models
                 .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                 .toList(),
-            onChanged: (v) => setState(() => _selectedModel = v!),
+            onChanged: (v) => setState(() => _selectedModel = v ?? _selectedModel),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _saving ? null : _saveSettings,
+            child: _saving
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Save Settings'),
           ),
           const SizedBox(height: 24),
           Text('Manual Agent Runs',

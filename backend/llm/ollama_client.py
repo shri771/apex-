@@ -25,7 +25,10 @@ async def generate(
         response.raise_for_status()
         data = response.json()
         raw = data.get("response", "{}")
-        return json.loads(raw)
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
 
 
 async def is_available() -> bool:
