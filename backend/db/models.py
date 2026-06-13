@@ -63,3 +63,18 @@ class Brief(Base):
 Index("idx_insights_agent_created", Insight.agent, Insight.created_at.desc())
 Index("idx_alerts_dismissed", Alert.dismissed, Alert.created_at.desc())
 Index("idx_agent_runs_agent", AgentRun.agent, AgentRun.started_at.desc())
+
+
+class Competitor(Base):
+    __tablename__ = "competitors"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    name        = Column(Text, nullable=False)
+    website     = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    type        = Column(Text, nullable=False)   # 'direct'|'indirect'|'emerging'
+    active      = Column(Integer, default=1)     # 1=active, 0=archived
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+Index("idx_competitors_active", Competitor.active, Competitor.created_at.desc())

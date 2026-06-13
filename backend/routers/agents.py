@@ -52,6 +52,21 @@ async def _trigger_agent(name: str):
         elif name == "strategy":
             from backend.agents.strategy import StrategyAgent
             await StrategyAgent().run()
+        elif name == "competitor_discovery":
+            from backend.agents.competitor_discovery import CompetitorDiscoveryAgent
+            await CompetitorDiscoveryAgent().run()
+        elif name == "market_trends":
+            from backend.agents.market_trends import MarketTrendsAgent
+            await MarketTrendsAgent().run()
+        elif name == "competitor_intelligence":
+            from backend.agents.competitor_intelligence import CompetitorIntelligenceAgent
+            await CompetitorIntelligenceAgent().run()
+        elif name == "demand_lead_signals":
+            from backend.agents.demand_lead_signals import DemandLeadSignalsAgent
+            await DemandLeadSignalsAgent().run()
+        elif name == "alerts_agent":
+            from backend.agents.alerts_agent import AlertsAgent
+            await AlertsAgent().run()
     except ImportError:
         pass  # agent not yet implemented — silently skip
 

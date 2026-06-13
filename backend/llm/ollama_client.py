@@ -1,7 +1,12 @@
+import asyncio
 import json
 import httpx
 
 OLLAMA_BASE_URL = "http://localhost:11434"
+
+# phi3:mini cannot handle concurrent inference at 2.3 GB RAM — serialize all LLM calls.
+# fetch_sources() I/O runs freely in parallel; only the generate() body is gated.
+_ollama_semaphore = asyncio.Semaphore(1)
 
 
 async def generate(
@@ -17,18 +22,19 @@ async def generate(
         "format": "json",
         "stream": False,
     }
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            f"{OLLAMA_BASE_URL}/api/generate",
-            json=payload,
-        )
-        response.raise_for_status()
-        data = response.json()
-        raw = data.get("response", "{}")
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
+    async with _ollama_semaphore:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            raw = data.get("response", "{}")
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                return {}
 
 
 async def is_available() -> bool:

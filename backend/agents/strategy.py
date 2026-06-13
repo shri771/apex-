@@ -49,7 +49,10 @@ class StrategyAgent(BaseAgent):
         try:
             rows = (
                 db.query(Insight)
-                .filter(Insight.agent != "strategy", Insight.created_at >= since)
+                .filter(
+                    Insight.agent.in_(["market_trends", "competitor_intelligence"]),
+                    Insight.created_at >= since,
+                )
                 .order_by(Insight.agent, Insight.category)
                 .all()
             )
