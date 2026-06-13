@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'theme.dart';
 import 'services/api_service.dart';
-import 'screens/dashboard.dart';
 import 'screens/marketing_screen.dart';
 import 'screens/product_screen.dart';
 import 'screens/sales_screen.dart';
@@ -19,13 +19,7 @@ class MarketIntelligenceApp extends StatelessWidget {
     return MaterialApp(
       title: 'Market Intelligence',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.dark(),
       home: const MainShell(),
     );
   }
@@ -48,44 +42,36 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _screens = [
-      DashboardScreen(api: _api),
       MarketingScreen(api: _api),
       ProductScreen(api: _api),
       SalesScreen(api: _api),
       StrategyScreen(api: _api),
+      SettingsScreen(api: _api),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Market Intelligence'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => SettingsScreen(api: _api)),
-            ),
-          ),
-        ],
-      ),
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.trending_up), label: 'Marketing'),
-          BottomNavigationBarItem(icon: Icon(Icons.star_rate), label: 'Product'),
-          BottomNavigationBarItem(icon: Icon(Icons.business), label: 'Sales'),
-          BottomNavigationBarItem(icon: Icon(Icons.article), label: 'Strategy'),
-        ],
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFF1F2937))),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (i) => setState(() => _currentIndex = i),
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.campaign_outlined), activeIcon: Icon(Icons.campaign), label: 'Marketing'),
+            BottomNavigationBarItem(icon: Icon(Icons.star_outline), activeIcon: Icon(Icons.star), label: 'Product'),
+            BottomNavigationBarItem(icon: Icon(Icons.bolt_outlined), activeIcon: Icon(Icons.bolt), label: 'Sales'),
+            BottomNavigationBarItem(icon: Icon(Icons.auto_stories_outlined), activeIcon: Icon(Icons.auto_stories), label: 'Strategy'),
+            BottomNavigationBarItem(icon: Icon(Icons.tune_outlined), activeIcon: Icon(Icons.tune), label: 'Settings'),
+          ],
+        ),
       ),
     );
   }

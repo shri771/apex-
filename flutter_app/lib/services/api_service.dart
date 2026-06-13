@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/insight.dart';
 import '../models/alert.dart';
 import '../models/brief.dart';
+import '../models/competitor.dart';
 
 class ApiService {
   static const String _baseUrl = 'http://127.0.0.1:8000';
@@ -123,6 +124,26 @@ class ApiService {
       return filePath;
     } on DioException catch (e) {
       debugPrint('downloadBrief error: ${e.message}');
+      rethrow;
+    }
+  }
+
+  Future<List<Competitor>> getCompetitors() async {
+    try {
+      final response = await _dio.get('/competitors');
+      final list = response.data as List<dynamic>;
+      return list.map((e) => Competitor.fromJson(e as Map<String, dynamic>)).toList();
+    } on DioException catch (e) {
+      debugPrint('getCompetitors error: ${e.message}');
+      return [];
+    }
+  }
+
+  Future<void> triggerPipeline() async {
+    try {
+      await _dio.post('/pipeline/run');
+    } on DioException catch (e) {
+      debugPrint('triggerPipeline error: ${e.message}');
       rethrow;
     }
   }

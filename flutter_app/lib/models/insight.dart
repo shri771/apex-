@@ -31,11 +31,15 @@ class Insight {
 
   factory Insight.fromJson(Map<String, dynamic> json) {
     Map<String, dynamic>? meta;
-    if (json['metadata'] != null) {
-      if (json['metadata'] is String) {
-        meta = jsonDecode(json['metadata'] as String) as Map<String, dynamic>;
-      } else {
-        meta = json['metadata'] as Map<String, dynamic>;
+    // extra_data is the actual DB/API field; metadata is a legacy fallback
+    final rawMeta = json['extra_data'] ?? json['metadata'];
+    if (rawMeta != null) {
+      if (rawMeta is String) {
+        try {
+          meta = jsonDecode(rawMeta as String) as Map<String, dynamic>;
+        } catch (_) {}
+      } else if (rawMeta is Map) {
+        meta = Map<String, dynamic>.from(rawMeta as Map);
       }
     }
     return Insight(
