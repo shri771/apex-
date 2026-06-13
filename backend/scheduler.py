@@ -1,6 +1,7 @@
+import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone=pytz.utc)
 
 AGENT_NAMES = {"marketing", "product", "sales", "strategy"}
 
