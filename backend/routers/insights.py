@@ -45,7 +45,7 @@ def list_insights(
 
 @router.post("")
 def create_insight(payload: InsightCreate, db: Session = Depends(get_db)):
-    row = Insight(**payload.model_dump())
+    row = Insight(**payload.dict())
     db.add(row)
     db.commit()
     db.refresh(row)
