@@ -23,8 +23,10 @@ INSIGHT_RETENTION_DAYS = 90
 
 
 class BaseAgent(ABC):
-    def __init__(self, name: str, model: str = DEFAULT_MODEL):
-        self.name = name
+    agent_name: str = "base"
+
+    def __init__(self, model: str = DEFAULT_MODEL):
+        self.name = self.__class__.agent_name
         self.model = model
         self.ollama_client = _ollama_client
 
