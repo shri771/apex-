@@ -7,9 +7,6 @@ pkg update -y && pkg upgrade -y
 echo "==> Installing system dependencies..."
 pkg install python git clang libxml2 libxslt -y
 
-echo "==> Upgrading pip..."
-pip install --upgrade pip
-
 echo "==> Installing Python requirements..."
 pip install -r ~/iq-hack/backend/requirements.txt
 
