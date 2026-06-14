@@ -1,5 +1,5 @@
+import json
 import logging
-import xml.etree.ElementTree as ET
 
 import httpx
 
@@ -12,19 +12,35 @@ DEFAULT_FEEDS = [
     "https://trends.google.com/trends/trendingsearches/daily/rss?geo=IN",
 ]
 
-SYSTEM_PROMPT = "You are a market intelligence analyst. Respond only with valid JSON."
+SYSTEM_PROMPT = "You are a competitive market intelligence analyst. Respond only with valid JSON."
 
-USER_PROMPT_TEMPLATE = """Analyse this market content and return a JSON object with exactly these fields:
+USER_PROMPT_TEMPLATE = """Analyse this market content for threats and opportunities. Return a JSON object with exactly these fields:
 {{
   "summary": "one-sentence summary",
   "category": "threat|opportunity|neutral",
   "severity": "high|medium|low",
   "score": 0.0,
-  "key_points": ["point1", "point2"]
+  "key_points": ["point1", "point2"],
+  "competitor_name": "company name or empty string",
+  "threat_score": 50,
+  "evidence": ["evidence point 1", "evidence point 2", "evidence point 3"],
+  "opportunity_title": "short opportunity title or empty string",
+  "opportunity_detail": "detail about market opportunity or empty string",
+  "demand_trend_pct": 0
 }}
+
+Rules:
+- threat_score is integer 0-100 calculated from: mentions volume (30pts), sentiment negativity (30pts), hiring activity (20pts), product launches (20pts)
+- evidence must be 2-3 specific factual bullet points proving WHY this is a threat/opportunity
+- if competitor_name is empty, set threat_score to 0 and evidence to []
+- opportunity_title and opportunity_detail are filled only when category is "opportunity"
+- demand_trend_pct is % change in demand (positive means growing), 0 if unknown
 
 Title: {title}
 Content: {content}"""
+
+
+import xml.etree.ElementTree as ET
 
 
 class MarketingAgent(BaseAgent):
@@ -33,7 +49,6 @@ class MarketingAgent(BaseAgent):
     async def fetch_sources(self) -> list[dict]:
         feeds = self._get_setting("marketing_feeds", DEFAULT_FEEDS)
         if isinstance(feeds, str):
-            import json
             try:
                 feeds = json.loads(feeds)
             except Exception:
@@ -56,7 +71,6 @@ class MarketingAgent(BaseAgent):
         items = []
         try:
             root = ET.fromstring(xml_text)
-            # handle both RSS <channel><item> and Atom <entry>
             ns = {"atom": "http://www.w3.org/2005/Atom"}
             channel = root.find("channel")
             entries = channel.findall("item") if channel is not None else root.findall("atom:entry", ns)
@@ -94,6 +108,31 @@ class MarketingAgent(BaseAgent):
             user=user_msg,
             timeout=60,
         )
+
+        # Build enriched metadata with evidence + threat score
+        threat_score = int(result.get("threat_score", 0))
+        # Clamp to 0-100
+        threat_score = max(0, min(100, threat_score))
+
+        evidence = result.get("evidence", [])
+        if not isinstance(evidence, list):
+            evidence = []
+
+        competitor_name = result.get("competitor_name", "")
+        opportunity_title = result.get("opportunity_title", "")
+        opportunity_detail = result.get("opportunity_detail", "")
+        demand_trend_pct = int(result.get("demand_trend_pct", 0))
+
+        extra_data = json.dumps({
+            "key_points": result.get("key_points", []),
+            "competitor_name": competitor_name,
+            "threat_score": threat_score,
+            "evidence": evidence,
+            "opportunity_title": opportunity_title,
+            "opportunity_detail": opportunity_detail,
+            "demand_trend_pct": demand_trend_pct,
+        })
+
         return {
             "summary": result.get("summary", item.get("title", "")),
             "category": result.get("category", "neutral"),
@@ -102,5 +141,5 @@ class MarketingAgent(BaseAgent):
             "key_points": result.get("key_points", []),
             "source": item.get("link", item.get("source_url", "")),
             "raw_text": item.get("description", ""),
-            "metadata": None,
+            "metadata": extra_data,
         }

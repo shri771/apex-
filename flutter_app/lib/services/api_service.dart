@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/insight.dart';
 import '../models/alert.dart';
 import '../models/brief.dart';
+import '../models/snapshot.dart';
 
 class ApiService {
   static const String _baseUrl = 'http://127.0.0.1:8000';
@@ -102,6 +103,17 @@ class ApiService {
     } on DioException catch (e) {
       debugPrint('downloadBrief error: ${e.message}');
       rethrow;
+    }
+  }
+
+  /// Returns the executive market snapshot (threats, opportunities, signals, etc.)
+  Future<MarketSnapshot> getSnapshot() async {
+    try {
+      final response = await _dio.get('/insights/snapshot');
+      return MarketSnapshot.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      debugPrint('getSnapshot error: ${e.message}');
+      return MarketSnapshot.empty();
     }
   }
 }

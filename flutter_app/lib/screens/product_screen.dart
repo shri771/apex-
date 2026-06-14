@@ -2,10 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../services/api_service.dart';
 import '../models/insight.dart';
+import '../models/snapshot.dart';
+import '../widgets/market_snapshot_card.dart';
 
 class ProductScreen extends StatefulWidget {
   final ApiService api;
-  const ProductScreen({super.key, required this.api});
+  final MarketSnapshot snapshot;
+  final bool snapshotLoading;
+
+  const ProductScreen({
+    super.key,
+    required this.api,
+    required this.snapshot,
+    this.snapshotLoading = false,
+  });
 
   @override
   State<ProductScreen> createState() => _ProductScreenState();
@@ -61,6 +71,15 @@ class _ProductScreenState extends State<ProductScreen> {
       for (final kp in insight.keyPoints) {
         if (seen.add(kp)) result.add(kp);
       }
+      // Also pull feature_requests from metadata if present
+      final meta = insight.metadata ?? {};
+      final features = meta['feature_requests'];
+      if (features is List) {
+        for (final f in features) {
+          final fs = f.toString();
+          if (seen.add(fs)) result.add(fs);
+        }
+      }
     }
     return result;
   }
@@ -69,34 +88,60 @@ class _ProductScreenState extends State<ProductScreen> {
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: _fetch,
-      child: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                Text('Sentiment (Last 14 Days)',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                SizedBox(height: 220, child: _buildChart()),
-                const SizedBox(height: 24),
-                Text('Feature Requests',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                _featureRequests.isEmpty
-                    ? const Text('No feature request data yet.')
-                    : Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: _featureRequests
-                            .map((f) => Chip(
-                                  label: Text(f),
-                                  backgroundColor:
-                                      Colors.indigo.withOpacity(0.2),
-                                ))
-                            .toList(),
-                      ),
-              ],
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          MarketSnapshotCard(
+            snapshot: widget.snapshot,
+            isLoading: widget.snapshotLoading,
+          ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Text('Sentiment (Last 14 Days)',
+                  style: Theme.of(context).textTheme.titleMedium),
             ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(height: 200, child: _buildChart()),
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+              child: Text('Feature Requests',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _featureRequests.isEmpty
+                  ? const Text('No feature request data yet.',
+                      style: TextStyle(color: Colors.grey))
+                  : Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: _featureRequests
+                          .take(30)
+                          .map((f) => Chip(
+                                label: Text(f,
+                                    style: const TextStyle(fontSize: 11)),
+                                backgroundColor:
+                                    Colors.indigo.withOpacity(0.2),
+                                visualDensity: VisualDensity.compact,
+                              ))
+                          .toList(),
+                    ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ],
+      ),
     );
   }
 
@@ -129,8 +174,10 @@ class _ProductScreenState extends State<ProductScreen> {
               ),
             ),
           ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
         lineBarsData: [
           LineChartBarData(

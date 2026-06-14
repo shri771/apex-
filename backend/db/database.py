@@ -32,3 +32,13 @@ def get_db():
 def init_db():
     from backend.db import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+
+    # Ensure the settings table exists (used by _get_setting in agents)
+    with engine.connect() as conn:
+        conn.execute(__import__("sqlalchemy").text(
+            """CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )"""
+        ))
+        conn.commit()

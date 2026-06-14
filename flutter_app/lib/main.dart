@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
+import 'models/snapshot.dart';
 import 'screens/dashboard.dart';
 import 'screens/marketing_screen.dart';
 import 'screens/product_screen.dart';
@@ -41,20 +43,42 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   final ApiService _api = ApiService();
   int _currentIndex = 0;
+  MarketSnapshot _snapshot = MarketSnapshot.empty();
+  bool _snapshotLoading = true;
+  Timer? _snapshotTimer;
 
-  late final List<Widget> _screens;
+  late final List<Widget Function(MarketSnapshot, bool)> _screenBuilders;
 
   @override
   void initState() {
     super.initState();
-    _screens = [
-      DashboardScreen(api: _api),
-      MarketingScreen(api: _api),
-      ProductScreen(api: _api),
-      SalesScreen(api: _api),
-      StrategyScreen(api: _api),
-    ];
+    _fetchSnapshot();
+    // Refresh snapshot every 60 seconds
+    _snapshotTimer = Timer.periodic(const Duration(seconds: 60), (_) => _fetchSnapshot());
   }
+
+  @override
+  void dispose() {
+    _snapshotTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchSnapshot() async {
+    final s = await _api.getSnapshot();
+    if (!mounted) return;
+    setState(() {
+      _snapshot = s;
+      _snapshotLoading = false;
+    });
+  }
+
+  List<Widget> get _screens => [
+        DashboardScreen(api: _api, snapshot: _snapshot, snapshotLoading: _snapshotLoading),
+        MarketingScreen(api: _api, snapshot: _snapshot, snapshotLoading: _snapshotLoading),
+        ProductScreen(api: _api, snapshot: _snapshot, snapshotLoading: _snapshotLoading),
+        SalesScreen(api: _api, snapshot: _snapshot, snapshotLoading: _snapshotLoading),
+        StrategyScreen(api: _api, snapshot: _snapshot, snapshotLoading: _snapshotLoading),
+      ];
 
   @override
   Widget build(BuildContext context) {

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from backend.db.database import SessionLocal
 from backend.db.models import AgentRun, Insight, Alert
-from backend import llm
+from backend.llm import ollama_client as _ollama_module
 
 
 SYSTEM_PROMPT = (
@@ -21,10 +21,42 @@ RAW_TEXT_RETENTION_DAYS = 30
 INSIGHT_RETENTION_DAYS = 90
 
 
+class _OllamaClientWrapper:
+    """Wraps the module-level ollama generate function as an object."""
+
+    async def generate(self, model: str, system: str, user: str, timeout: int = 60) -> dict:
+        return await _ollama_module.generate(
+            model=model,
+            system=system,
+            user=user,
+            timeout=timeout,
+        )
+
+
 class BaseAgent(ABC):
-    def __init__(self, name: str, model: str = DEFAULT_MODEL):
-        self.name = name
+    def __init__(self, name: str = "", model: str = DEFAULT_MODEL):
+        # Subclasses set `agent_name` as a class attribute; fall back to arg.
+        self.name = getattr(self.__class__, "agent_name", name) or name
         self.model = model
+        self.ollama_client = _OllamaClientWrapper()
+
+    # ------------------------------------------------------------------
+    # Settings helper — reads from SQLite `settings` table with fallback
+    # ------------------------------------------------------------------
+    def _get_setting(self, key: str, default=None):
+        try:
+            from backend.db.database import SessionLocal as _SL
+            from sqlalchemy import text
+            with _SL() as db:
+                row = db.execute(
+                    text("SELECT value FROM settings WHERE key = :k"),
+                    {"k": key},
+                ).fetchone()
+                if row:
+                    return row[0]
+        except Exception:
+            pass
+        return default
 
     @abstractmethod
     async def fetch_sources(self) -> list[dict]:
@@ -35,7 +67,7 @@ class BaseAgent(ABC):
         """Analyse a raw item and return an insight dict."""
 
     async def _default_analyse(self, item: dict) -> dict:
-        result = await llm.ollama_client.generate(
+        result = await self.ollama_client.generate(
             model=self.model,
             system=SYSTEM_PROMPT,
             user=USER_PROMPT_TEMPLATE.format(raw_text=item.get("raw_text", "")),
@@ -48,6 +80,9 @@ class BaseAgent(ABC):
         now = datetime.utcnow()
         expires_at = now + timedelta(days=INSIGHT_RETENTION_DAYS)
 
+        # Support both 'metadata' and 'extra_data' keys from agent analyse()
+        extra_data_val = insight.get("metadata") or insight.get("extra_data")
+
         row = Insight(
             agent=self.name,
             run_id=run_id,
@@ -57,7 +92,7 @@ class BaseAgent(ABC):
             category=insight.get("category", "neutral"),
             severity=insight.get("severity", "low"),
             score=insight.get("score"),
-            extra_data=insight.get("metadata"),
+            extra_data=extra_data_val,
             expires_at=expires_at,
         )
 

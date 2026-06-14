@@ -162,7 +162,7 @@ class ProductAgent(BaseAgent):
                 .filter(
                     Insight.agent == "product",
                     Insight.created_at >= since,
-                    Insight.metadata.contains(source_type),
+                    Insight.extra_data.contains(source_type),
                 )
                 .scalar()
             )

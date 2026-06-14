@@ -1,6 +1,9 @@
 import os
+from datetime import date, datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.db.database import get_db
 from backend.db.models import Brief
@@ -8,7 +11,17 @@ from backend.db.models import Brief
 router = APIRouter(prefix="/briefs", tags=["briefs"])
 
 
-@router.get("")
+class BriefOut(BaseModel):
+    id: int
+    week_start: date
+    file_path: str
+    summary: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("", response_model=list[BriefOut])
 def list_briefs(db: Session = Depends(get_db)):
     return db.query(Brief).order_by(Brief.week_start.desc()).all()
 

@@ -22,14 +22,29 @@ SECTIONS = [
 
 USER_PROMPT_TEMPLATE = """You have received market intelligence data from the past 7 days. Write a weekly strategy brief.
 
-Return a JSON object with exactly these top-level keys (each value is a string of 2-5 sentences or bullet-point prose):
+Return a JSON object with exactly these top-level keys:
 {{
-  "Executive Summary": "...",
-  "Top Threats": "...",
-  "Top Opportunities": "...",
-  "Recommended Actions": "...",
-  "Metrics": "..."
+  "Executive Summary": "2-5 sentences summarising the market situation",
+  "Top Threats": "bullet-point prose of top 3 threats",
+  "Top Opportunities": "bullet-point prose of top 3 opportunities",
+  "Recommended Actions": "prose summary of actions",
+  "Metrics": "key numbers and metrics observed",
+  "recommended_actions": [
+    {{
+      "action": "specific action title",
+      "detail": "why this matters and how to execute",
+      "impact": "high|medium|low",
+      "confidence": 85
+    }}
+  ],
+  "top_recommendation": "single most important action as a short sentence"
 }}
+
+Rules:
+- recommended_actions must be a JSON array of 3-5 items
+- confidence is integer 0-100
+- impact is one of: high, medium, low
+- top_recommendation is a single concise sentence (max 15 words)
 
 DATA:
 {data_block}"""
@@ -86,19 +101,53 @@ class StrategyAgent(BaseAgent):
         for section in SECTIONS:
             sections[section] = result.get(section, "No data available.")
 
+        # Extract structured recommended_actions with fallback
+        raw_actions = result.get("recommended_actions", [])
+        if not isinstance(raw_actions, list):
+            raw_actions = []
+
+        # Normalise each action
+        recommended_actions = []
+        for a in raw_actions[:5]:
+            if isinstance(a, dict):
+                recommended_actions.append({
+                    "action": str(a.get("action", "")),
+                    "detail": str(a.get("detail", "")),
+                    "impact": str(a.get("impact", "medium")).lower(),
+                    "confidence": max(0, min(100, int(a.get("confidence", 70)))),
+                })
+
+        top_recommendation = str(result.get("top_recommendation", "Review market intelligence data."))
+
         self._write_docx(sections, week_start)
         self._insert_brief_record(sections, week_start)
+
+        # Derive category from data: more threats → threat, more opportunities → opportunity
+        threat_count = sum(
+            1 for agent_items in grouped.values()
+            for f in agent_items if f.get("category") == "threat"
+        )
+        opp_count = sum(
+            1 for agent_items in grouped.values()
+            for f in agent_items if f.get("category") == "opportunity"
+        )
+        derived_category = "threat" if threat_count > opp_count else "opportunity"
 
         executive_summary = sections.get("Executive Summary", "Weekly brief generated.")
         return {
             "summary": executive_summary[:500],
-            "category": "opportunity",
+            "category": derived_category,
             "severity": "low",
             "score": 0.5,
             "key_points": list(sections.keys()),
             "source": f"brief_{week_start}.docx",
             "raw_text": data_block[:2000],
-            "metadata": json.dumps({"week_start": week_start, "sections": sections}),
+            "metadata": json.dumps({
+                "week_start": week_start,
+                "sections": sections,
+                "recommended_actions": recommended_actions,
+                "top_recommendation": top_recommendation,
+            }),
         }
 
     def _build_data_block(self, grouped: dict) -> str:
@@ -128,7 +177,8 @@ class StrategyAgent(BaseAgent):
                 content = sections.get(section_title, "")
                 doc.add_heading(section_title, level=1)
                 para = doc.add_paragraph(content)
-                para.runs[0].font.size = Pt(11) if para.runs else None
+                if para.runs:
+                    para.runs[0].font.size = Pt(11)
 
             file_path = os.path.join(BRIEF_DIR, f"brief_{week_start}.docx")
             doc.save(file_path)
