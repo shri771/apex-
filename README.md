@@ -13,6 +13,7 @@ The goal is to monitor market signals such as competitor campaigns, product sent
 - [Backend](#backend)
 - [Flutter App](#flutter-app)
 - [Agents](#agents)
+- [Pipeline](#pipeline)
 - [Database](#database)
 - [API Reference](#api-reference)
 - [Setup](#setup)
@@ -23,7 +24,7 @@ The goal is to monitor market signals such as competitor campaigns, product sent
 
 ## Overview
 
-Market Intelligence is built around four AI agents:
+Market Intelligence started with four core AI agents and now also includes a newer six-agent market intelligence pipeline.
 
 | Agent | Purpose | Schedule |
 | --- | --- | --- |
@@ -31,6 +32,17 @@ Market Intelligence is built around four AI agents:
 | Product | Reads product reviews and public product discussions, estimates sentiment | Every 4 hours |
 | Sales | Reads hiring and company announcement signals, estimates buying intent | Every 6 hours |
 | Strategy | Synthesizes the last 7 days of insights into a weekly `.docx` brief | Sundays at 08:00 |
+
+Newer pipeline agents:
+
+| Agent | Purpose | Schedule |
+| --- | --- | --- |
+| Competitor Discovery | Discovers and stores active competitors | Daily at 06:00 UTC |
+| Market Trends | Collects broader market trend signals | Every 6 hours |
+| Competitor Intelligence | Reads stored competitors and gathers competitor signals | Every 12 hours |
+| Demand Lead Signals | Collects demand and lead-intent signals | Every 8 hours |
+| Strategy | Synthesizes recent findings into a strategy brief | Sundays at 08:00 UTC, plus full pipeline |
+| Alerts Agent | Produces alert-oriented synthesis from recent findings | Every 6 hours |
 
 The system is intentionally local-first:
 
@@ -48,16 +60,16 @@ Implemented:
 
 - FastAPI app startup with database initialization and APScheduler.
 - SQLite schema for insights, agent runs, alerts, and briefs.
-- REST endpoints for insights, alerts, agents, briefs, and health checks.
+- REST endpoints for insights, alerts, agents, briefs, settings, competitors, the full pipeline, and health checks.
 - Ollama client wrapper using `/api/generate` with JSON mode.
-- Agent modules for marketing, product, sales, and strategy.
+- Agent modules for marketing, product, sales, strategy, competitor discovery, market trends, competitor intelligence, demand/lead signals, and alerts.
 - Strategy `.docx` generation with `python-docx`.
 - Flutter Material app with dashboard, per-agent screens, settings, alert banner, polling, and brief download/open support.
 - Termux setup and startup scripts.
 
 Important caveat:
 
-Some backend agent code currently references helper methods or attributes that are not yet implemented on `BaseAgent`, such as `_get_setting`, `ollama_client`, and some metadata access paths. Treat the agent layer as close to the intended design, but expect to finish those base utilities before all manual and scheduled agent runs work end-to-end.
+This is still a prototype. The shared agent base now provides settings lookup, model selection, Ollama access, run tracking, insight storage, and alert creation. Some specialized agents may still need endpoint-by-endpoint verification with live data sources and Ollama running before all scheduled jobs can be considered production-ready.
 
 ## Architecture
 
@@ -109,10 +121,16 @@ Strategy agent
 .
 |-- backend/
 |   |-- main.py                  FastAPI app and lifespan hooks
+|   |-- pipeline.py              Full multi-agent pipeline orchestration
 |   |-- scheduler.py             APScheduler job registration
 |   |-- requirements.txt         Python dependencies
 |   |-- agents/
 |   |   |-- base.py              Shared agent run/store logic
+|   |   |-- competitor_discovery.py
+|   |   |-- competitor_intelligence.py
+|   |   |-- market_trends.py
+|   |   |-- demand_lead_signals.py
+|   |   |-- alerts_agent.py
 |   |   |-- marketing.py         RSS/trend market signal agent
 |   |   |-- product.py           Review, Reddit, and HN sentiment agent
 |   |   |-- sales.py             Hiring, blog, and LinkedIn signal agent
@@ -127,6 +145,9 @@ Strategy agent
 |       |-- alerts.py            Alert list/dismiss endpoints
 |       |-- agents.py            Agent status/manual-run endpoints
 |       |-- briefs.py            Brief list/download endpoints
+|       |-- competitors.py       Competitor list/detail/archive endpoints
+|       |-- pipeline.py          Full pipeline trigger endpoint
+|       |-- settings.py          Settings list/upsert endpoints
 |
 |-- flutter_app/
 |   |-- pubspec.yaml             Flutter dependencies
@@ -186,13 +207,14 @@ The Flutter app is a dark Material 3 Android dashboard.
 
 Main features:
 
-- Bottom navigation for Dashboard, Marketing, Product, Sales, and Strategy.
-- Dashboard polling every 30 seconds.
+- Bottom navigation for Marketing, Product, Sales, Strategy, and Settings.
+- Agent status polling every 10 seconds with running/completion feedback.
 - Pull-to-refresh for latest insights and alerts.
 - Alert banner for active high-severity alerts.
-- Manual agent trigger buttons in Settings.
+- Manual agent trigger buttons in Settings, including the newer pipeline agents.
 - Model selector UI for `phi3:mini`, `llama3.2:3b`, and `gemma2:2b`.
 - Brief download and open flow using `open_filex`.
+- Competitor and pipeline API support in the REST client.
 
 The REST client is defined in:
 
@@ -297,6 +319,46 @@ Expected brief sections:
 - Recommended Actions
 - Metrics
 
+### Newer Pipeline Agents
+
+Files:
+
+```text
+backend/agents/competitor_discovery.py
+backend/agents/market_trends.py
+backend/agents/competitor_intelligence.py
+backend/agents/demand_lead_signals.py
+backend/agents/alerts_agent.py
+```
+
+These agents support a broader staged workflow:
+
+1. Discover competitors and store active competitor records.
+2. Run market-trend, competitor-intelligence, and demand/lead-signal collection.
+3. Run strategy and alert synthesis over the stored findings.
+
+## Pipeline
+
+The full pipeline is orchestrated in:
+
+```text
+backend/pipeline.py
+```
+
+Execution order:
+
+```text
+Stage 0   CompetitorDiscovery
+Stage 1   MarketTrends + CompetitorIntelligence + DemandLeadSignals
+Stage 2   Strategy + AlertsAgent
+```
+
+The scheduler runs the full pipeline daily at 07:00 UTC. It can also be triggered manually through the API:
+
+```http
+POST /pipeline/run
+```
+
 ## Database
 
 SQLite database URL:
@@ -321,6 +383,8 @@ SQLite WAL mode is enabled through a SQLAlchemy connection event.
 | `agent_runs` | Scheduled/manual execution history |
 | `alerts` | Active and dismissed alert records |
 | `briefs` | Weekly strategy brief metadata and file paths |
+| `settings` | Key/value settings used by agents and the app |
+| `competitors` | Active and archived competitor records |
 
 ### Insight fields
 
@@ -425,6 +489,11 @@ Valid `name` values:
 - `product`
 - `sales`
 - `strategy`
+- `competitor_discovery`
+- `market_trends`
+- `competitor_intelligence`
+- `demand_lead_signals`
+- `alerts_agent`
 
 ### Briefs
 
@@ -439,6 +508,57 @@ GET /briefs/{brief_id}/download
 ```
 
 Downloads the generated `.docx` brief.
+
+### Settings
+
+```http
+GET /settings
+```
+
+Returns stored key/value settings.
+
+```http
+POST /settings
+```
+
+Creates or updates a setting.
+
+Example body:
+
+```json
+{
+  "key": "selected_model",
+  "value": "phi3:mini"
+}
+```
+
+### Competitors
+
+```http
+GET /competitors
+```
+
+Returns active competitors.
+
+```http
+GET /competitors/{competitor_id}
+```
+
+Returns a single competitor or `404`.
+
+```http
+POST /competitors/{competitor_id}/archive
+```
+
+Marks a competitor inactive.
+
+### Pipeline
+
+```http
+POST /pipeline/run
+```
+
+Triggers the full staged pipeline in the background.
 
 ## Setup
 
@@ -577,6 +697,12 @@ marketing   interval   every 2 hours
 product     interval   every 4 hours
 sales       interval   every 6 hours
 strategy    cron       Sunday 08:00
+competitor_discovery       cron       daily 06:00 UTC
+market_trends              interval   every 6 hours
+competitor_intelligence    interval   every 12 hours
+demand_lead_signals        interval   every 8 hours
+alerts_agent               interval   every 6 hours
+full_pipeline              cron       daily 07:00 UTC
 ```
 
 All jobs use:
@@ -637,19 +763,12 @@ The backend stores the path in the `briefs` table and serves the file through `F
 
 The next backend tasks are:
 
-- Add a `settings` table and persistence API for tracked feeds, app IDs, companies, keywords, and selected model.
-- Implement `BaseAgent._get_setting()`.
-- Expose or inject `ollama_client` consistently into agents.
-- Fix references to `Insight.metadata`; the ORM model currently uses `extra_data`.
-- Add seed/default settings so Product and Sales agents have source lists to read.
+- Verify all newer pipeline agents end-to-end with live source data and Ollama running.
+- Add seed/default settings for tracked feeds, app IDs, companies, keywords, and selected model.
 - Add tests for agent run lifecycle, alert creation, brief generation, and API serialization.
 - Add retention cleanup for raw text, insights, alerts, and briefs.
-- Decide whether Flutter Settings should persist values through new backend endpoints.
+- Expand Flutter Settings persistence around the newer backend settings endpoints.
 - Add error UI for backend unavailable, Ollama unavailable, and failed agent runs.
-
-Potential code issue to address early:
-
-- Subclasses currently do not define constructors, while `BaseAgent.__init__()` requires a `name` argument. Either give each agent an `__init__()` that calls `super().__init__("marketing")`, etc., or make `BaseAgent` infer the name from each subclass's `agent_name`.
 
 ## Related Docs
 
