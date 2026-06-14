@@ -31,16 +31,30 @@ class _ProductScreenState extends State<ProductScreen> {
   Future<void> _fetch() async {
     setState(() => _loading = true);
     final since = DateTime.now().subtract(Duration(days: _dayRange));
-    final data = await widget.api.getInsights(
-      agent: 'product',
-      limit: 50,
-      since: since.toIso8601String(),
-    );
+    // Fetch from legacy product agent AND demand_lead_signals as fallback
+    final results = await Future.wait([
+      widget.api.getInsights(agent: 'product', limit: 50, since: since.toIso8601String()),
+      widget.api.getInsights(agent: 'demand_lead_signals', limit: 20, since: since.toIso8601String()),
+    ]);
     if (!mounted) return;
+    final combined = [
+      ...results[0] as List<Insight>,
+      ...results[1] as List<Insight>,
+    ];
     setState(() {
-      _insights = data;
+      _insights = combined;
       _loading = false;
     });
+  }
+
+  Future<void> _runProductAgent() async {
+    try {
+      await widget.api.triggerAgentRun('product');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product agent started — pull to refresh in ~1 min')),
+      );
+    } catch (_) {}
   }
 
   Insight? get _anomaly =>
@@ -92,22 +106,69 @@ class _ProductScreenState extends State<ProductScreen> {
         backgroundColor: AppColors.surface,
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 16),
-                  if (_anomaly != null) ...[
-                    _buildAnomalyCard(_anomaly!),
-                    const SizedBox(height: 16),
-                  ],
-                  _buildSentimentScoreCard(),
-                  const SizedBox(height: 16),
-                  _buildVolumeChart(),
-                  const SizedBox(height: 16),
-                  _buildFrictionPoints(),
-                ],
+            : _insights.isEmpty
+                ? _buildEmptyState()
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 16),
+                      if (_anomaly != null) ...[
+                        _buildAnomalyCard(_anomaly!),
+                        const SizedBox(height: 16),
+                      ],
+                      _buildSentimentScoreCard(),
+                      const SizedBox(height: 16),
+                      _buildVolumeChart(),
+                      const SizedBox(height: 16),
+                      _buildFrictionPoints(),
+                    ],
+                  ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.star_outline, color: AppColors.textMuted, size: 48),
+              const SizedBox(height: 16),
+              const Text('No product data yet',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 16)),
+              const SizedBox(height: 8),
+              const Text(
+                'Run the Product agent to start tracking customer sentiment, reviews, and feature requests.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.5),
               ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: AppColors.bg,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: _runProductAgent,
+                  icon: const Icon(Icons.play_arrow, size: 18),
+                  label: const Text('Run Product Agent'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Also set Play Store App IDs and Reddit keywords in Settings for richer data.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.5),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

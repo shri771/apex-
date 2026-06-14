@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
@@ -22,6 +23,8 @@ class _StrategyScreenState extends State<StrategyScreen> {
   bool _loading = true;
   int? _openingBriefId;
   bool _pipelineRunning = false;
+  int _pipelineElapsed = 0;
+  Timer? _pipelineTimer;
 
   @override
   void initState() {
@@ -63,8 +66,20 @@ class _StrategyScreenState extends State<StrategyScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _pipelineTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _runPipeline() async {
-    setState(() => _pipelineRunning = true);
+    setState(() {
+      _pipelineRunning = true;
+      _pipelineElapsed = 0;
+    });
+    _pipelineTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _pipelineElapsed++);
+    });
     try {
       await widget.api.triggerPipeline();
       if (!mounted) return;
@@ -77,8 +92,15 @@ class _StrategyScreenState extends State<StrategyScreen> {
         const SnackBar(content: Text('Failed to start pipeline')),
       );
     } finally {
+      _pipelineTimer?.cancel();
       if (mounted) setState(() => _pipelineRunning = false);
     }
+  }
+
+  String get _pipelineElapsedStr {
+    final m = _pipelineElapsed ~/ 60;
+    final s = _pipelineElapsed % 60;
+    return m > 0 ? '${m}m ${s}s' : '${s}s';
   }
 
   String _formatWeek(String weekStart) {
@@ -294,7 +316,9 @@ class _StrategyScreenState extends State<StrategyScreen> {
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: AppColors.accent))
             : const Icon(Icons.play_circle_outline, size: 20),
-        label: Text(_pipelineRunning ? 'Generating…' : 'Generate New Brief'),
+        label: Text(_pipelineRunning
+            ? 'Running pipeline… $_pipelineElapsedStr'
+            : 'Generate New Brief'),
       ),
     );
   }

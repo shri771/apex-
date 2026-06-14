@@ -26,12 +26,18 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Future<void> _fetch() async {
     setState(() => _loading = true);
-    final data = await widget.api.getInsights(agent: 'demand_lead_signals', limit: 30);
+    // Fetch from new demand_lead_signals agent AND legacy sales agent
+    final results = await Future.wait([
+      widget.api.getInsights(agent: 'demand_lead_signals', limit: 20),
+      widget.api.getInsights(agent: 'sales', limit: 20),
+    ]);
     if (!mounted) return;
-    final sorted = List<Insight>.from(data)
-      ..sort((a, b) => (b.score ?? 0).compareTo(a.score ?? 0));
+    final combined = [
+      ...results[0] as List<Insight>,
+      ...results[1] as List<Insight>,
+    ]..sort((a, b) => (b.score ?? 0).compareTo(a.score ?? 0));
     setState(() {
-      _insights = sorted;
+      _insights = combined;
       _loading = false;
     });
   }
@@ -84,7 +90,7 @@ class _SalesScreenState extends State<SalesScreen> {
                   if (_insights.isEmpty)
                     _buildEmptyState()
                   else
-                    ..._insights.map(_buildLeadCard),
+                    for (final insight in _insights) _buildLeadCard(insight),
                 ],
               ),
       ),
